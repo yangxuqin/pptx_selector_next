@@ -15,7 +15,7 @@ Config::Config() {
         "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE");
     strcpy_s(pathWPS,
         "C:\\Program Files\\Kingsoft\\WPS Office\\12.1.0.23542\\office6\\wpp.exe");
-    strcpy_s(logFile, "D:\\logs\\pptx_selector.log");
+    logFile[0] = '\0';
     enableLog = true;
     fallback  = 0;  // 0=WPS, 1=PowerPoint
 }

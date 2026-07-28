@@ -104,6 +104,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Config cfg;
     LoadConfig(cfg, iniPath.c_str());
 
+    // 日志文件默认保存在 exe 同目录
+    if (cfg.logFile[0] == '\0') {
+        std::string logPath = GetExeDir() + "\\pptx_selector.log";
+        strcpy_s(cfg.logFile, logPath.c_str());
+    }
+
     // 2. 初始化日志
     Logger logger(cfg.enableLog, cfg.logFile);
     logger.initDir();
