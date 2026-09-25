@@ -43,7 +43,7 @@ trae/
 │   ├── config.h / .cpp    配置加载（读 config.ini）
 │   ├── logger.h / .cpp    日志系统
 │   ├── pptx_detector.h/.cpp  PPTX 创建者检测（ZIP 解析）
-│   └── app_launcher.h/.cpp   外部程序启动（ShellExecute）
+│   └── app_launcher.h/.cpp   外部程序启动（CreateProcessW）
 ├── third_party/           第三方库
 │   ├── miniz.c            miniz ZIP 解压库实现
 │   └── miniz.h            miniz 头文件
@@ -92,7 +92,7 @@ g++ src\main.cpp src\config.cpp src\logger.cpp src\pptx_detector.cpp src\app_lau
 | 参数 | 说明 |
 |------|------|
 | `-Isrc -Ithird_party` | 头文件搜索路径 |
-| `-lshell32` | 链接 ShellExecute 所需库 |
+| `-lshell32` | 链接 Win32 进程与目录 API 所需库 |
 | `-O2` | 优化级别 |
 | `-mwindows` | Windows 子系统，无控制台窗口 |
 | `-static` | 全静态链接，无运行时依赖 |
@@ -163,8 +163,8 @@ main.cpp (流程编排)
 
 - **C++**：核心逻辑实现
 - **miniz**：轻量级单文件 ZIP 解压缩库（位于 `third_party/`）
-- **Win32 API**：文件 IO、路径处理
-- **ShellExecuteA**：启动外部程序
+- **Win32 API**：文件 IO、路径处理、Unicode 进程启动
+- **CreateProcessW**：使用完整 Unicode 路径和严格转义的命令行启动外部程序
 
 ## 故障排查
 
@@ -191,4 +191,5 @@ main.cpp (流程编排)
 1. 确保 PowerPoint 和 WPS 的安装路径与 `config.ini` 配置一致
 2. 确保日志路径所在目录有写入权限
 3. 程序仅在 Windows 系统运行
-4. 文件读取使用 `CreateFileW`（Unicode），彻底解决中文路径问题
+4. 文件读取、配置、日志和启动均使用 Unicode Win32 API，避免中文路径经过系统 ANSI 代码页后损坏
+5. 日志以 UTF-8（含 BOM）写入，便于记事本等工具正确识别中文

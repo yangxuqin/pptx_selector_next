@@ -15,7 +15,7 @@
 - 语言：C++（兼容 C++11 及以上）
 - 构建：MinGW-w64（`g++` + `windres`），全静态链接
 - 第三方库：miniz（单文件 ZIP 解压，位于 `third_party/`）
-- 平台 API：Win32 API（文件 IO、ShellExecute、INI 读取）
+- 平台 API：Win32 API（文件 IO、CreateProcessW、INI 读取）
 
 ## 目录结构
 
@@ -52,14 +52,14 @@ trae/
 | `config` | 读取 `config.ini`、定位 exe 目录 | `struct Config`, `LoadConfig()`, `GetExeDir()` |
 | `logger` | 文件日志，自动时间戳 | `class Logger` |
 | `pptx_detector` | 解析 ZIP 提取 `<Application>` 并分类 | `enum class AppCreator`, `detectPptxCreator()` |
-| `app_launcher` | 检查 exe 存在性、ShellExecute 启动 | `appExists()`, `launchApp()` |
+| `app_launcher` | 检查 exe 存在性、CreateProcessW 启动 | `appExists()`, `launchApp()` |
 | `main` | 流程编排与降级/兜底决策 | `WinMain`, `chooseLauncher()`, `launchFallback()` |
 
 ### 主流程（main.cpp）
 
 1. `GetExeDir()` + `LoadConfig()` → 得到 `Config`
 2. 按 `Config` 构造 `Logger`，`initDir()` 建目录
-3. `CommandLineToArgvW` 取 PPTX 路径，转 ANSI 用于日志与 `ShellExecuteA`
+3. `CommandLineToArgvW` 取 PPTX 路径，全程保留 Unicode
 4. `appExists()` 检查 PowerPoint / WPS 是否可用
 5. `readFileToMemory()`（`CreateFileW`）读取 PPTX 到内存
 6. `detectPptxCreator()` 识别创建软件
@@ -77,7 +77,7 @@ trae/
 
 - **命名空间**：所有业务代码放入 `pptx_selector`；模块内部辅助函数放匿名命名空间
 - **头文件**：使用 `#pragma once`，包含守卫不用 `#ifndef`
-- **字符串**：Win32 调用统一用 ANSI（`char`/`ShellExecuteA`/`GetPrivateProfileStringA`）；文件路径入口用 Unicode（`CreateFileW`/`GetFileAttributesW`）以兼容中文路径
+- **字符串**：文件路径、配置和进程启动统一使用 Unicode（`wstring`/`CreateFileW`/`CreateProcessW`/`GetPrivateProfileStringW`），日志写为 UTF-8；避免在启动前转成 ANSI 造成中文路径损坏
 - **错误处理**：用 `enum class Err` 返回语义化退出码；运行失败尽量兜底而非崩溃
 - **资源管理**：HANDLE 立即 `CloseHandle`；`mz_zip_archive` 用 RAII `ZipGuard` 守护；`LPWSTR*` 用 `LocalFree` 释放
 - **注释**：文件头用块注释说明模块用途；复杂逻辑用行注释；公开 API 用 `///` Doxygen 风格
@@ -99,7 +99,7 @@ powershell -ExecutionPolicy Bypass -File compile.ps1
 - `windres` 编译 `resources/resource.rc` → `resource.o`（图标）
 - `g++` 编译 `src/*.cpp` + `third_party/miniz.c` + `resource.o`
 - 头文件路径：`-Isrc -Ithird_party`
-- 链接：`-lshell32`（ShellExecute）
+- 链接：`-lshell32`（`SHCreateDirectoryExW` 等 Shell 目录 API）
 - 静态链接 + `-mwindows`（无控制台）+ `-s`（剥离符号）
 
 构建产物 `pptx_selector.exe` 和 `resource.o` 已被 `.gitignore` 忽略。
@@ -109,7 +109,7 @@ powershell -ExecutionPolicy Bypass -File compile.ps1
 ### 新增配置项
 
 1. 在 `Config` 结构（`config.h`）添加字段，在构造函数设默认值
-2. 在 `LoadConfig`（`config.cpp`）用 `GetPrivateProfileStringA` / `GetPrivateProfileIntA` 读取
+2. 在 `LoadConfig`（`config.cpp`）用 `GetPrivateProfileStringW` / `GetPrivateProfileIntW` 读取
 3. 更新 `config.ini` 注释与 `README.md` 配置表
 
 ### 新增检测规则
@@ -130,9 +130,9 @@ powershell -ExecutionPolicy Bypass -File compile.ps1
 
 ## 常见陷阱
 
-1. **中文路径**：必须用 `CreateFileW`/`GetFileAttributesW` 读取文件；`ShellExecuteA` 用 ANSI 路径即可（系统会转换）
+1. **中文路径**：文件读取和启动都必须使用 `CreateFileW`/`GetFileAttributesW`/`CreateProcessW`，禁止先转换为 ANSI
 2. **miniz 实现位置**：`MINIZ_IMPLEMENTATION` 只能在**一个** `.cpp` 中定义（当前是 `pptx_detector.cpp`），否则重复定义链接错误
-3. **INI 默认值**：`GetPrivateProfileStringA` 第三参数为默认值，传入当前字段值以实现"INI 缺失则保留默认"
+3. **INI 默认值**：`GetPrivateProfileStringW` 第三个参数为默认值，传入当前字段值以实现"INI 缺失则保留默认"
 4. **资源路径**：`resource.rc` 中 `ICON "icon.ico"` 是相对路径，`windres` 从 rc 文件所在目录解析，故两者必须同在 `resources/`
 5. **构建目录**：脚本使用相对路径，必须从项目根目录执行
 
